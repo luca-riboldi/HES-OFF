@@ -92,7 +92,72 @@ def evaluate_process_model(HEAT_DEMAND, POWER_DEMAND,
                     FC_power_current = 0.00
 
             elif GT_power_max + WT_power_available[t] >= power_demand:
+                
+                # #One option to decide whether to produce H2 (case 3A) or not (case 3B) is to look into the future (e.g. 1 week)
+                # #If in the future it is predicted the need of much H2 (because low wind), then 3A. And viceversa.
+                # #This might make sense for design purposes but not for operation purposes
+                # future = np.minimum(t+168+1, n)
+                # for tt in range(t+1, future):
 
+                # # # Case 3A: Use GT and WT to satisfy the power demand (use GT+EL to recharge H2)
+                # # if H2_level[p,t] < H2_RECHARGE_THRESHOLD * H2_CAPACITY:
+                # #     flag_current = 3
+                # #     WT_power_current = WT_power_available[t]
+                # #     EL_power_current = np.minimum(EL_RATED_POWER, GT_power_max + WT_power_current - power_demand)
+                # #     GT_power_current = np.minimum(GT_power_max, power_demand + EL_power_current - WT_power_current)
+                # #     FC_power_current = 0.00
+                
+                # # Case 3B: Use GT and WT to satisfy the power demand (do not use GT+EL to recharge H2)
+                # elif H2_level[p,t] < H2_RECHARGE_THRESHOLD * H2_CAPACITY:
+                #     flag_current = 3
+                #     WT_power_current = WT_power_available[t]
+                #     EL_power_current = 0.00
+                #     GT_power_current = np.minimum(GT_power_max, power_demand - WT_power_current)
+                #     FC_power_current = 0.00                
+
+                #Another option to decide whether to produce H2 (case 3A) or not (case 3B) is to define different levels of H2 in storage
+                if H2_RECHARGE_THRESHOLD < 0.75:
+                    H2_MIDDLE_STORAGE = 0.75
+                else:
+                    H2_MIDDLE_STORAGE = H2_RECHARGE_THRESHOLD# + 0.10
+                
+                if H2_MIDDLE_STORAGE >= 1.00:
+                    H2_MIDDLE_STORAGE == 0.999
+                #Avoid instances where H2 is used both in GT and in FC
+                if H2_MIDDLE_STORAGE >= H2_COFIRE_THRESHOLD:
+                    H2_MIDDLE_STORAGE == H2_COFIRE_THRESHOLD  
+                                 
+                # Case 3A: Use GT and WT to satisfy the power demand (use GT+EL to recharge H2)
+                if H2_level[p,t] < H2_RECHARGE_THRESHOLD * H2_CAPACITY:
+                    flag_current = 3
+                    WT_power_current = WT_power_available[t]
+                    EL_power_current = np.minimum(EL_RATED_POWER, GT_power_max + WT_power_current - power_demand)
+                    GT_power_current = np.minimum(GT_power_max, power_demand + EL_power_current - WT_power_current)
+                    FC_power_current = 0.00
+                
+                # Case 3B: Use GT and WT to satisfy the power demand (do not use GT+EL to recharge H2)
+                elif H2_level[p,t] < H2_MIDDLE_STORAGE * H2_CAPACITY:
+                    flag_current = 3
+                    WT_power_current = WT_power_available[t]
+                    EL_power_current = 0.00
+                    GT_power_current = np.minimum(GT_power_max, power_demand - WT_power_current)
+                    FC_power_current = 0.00
+
+                # Case 4: Use FC, GT and WT to satisfy the power demand (do not use GT+EL to recharge H2)
+                else: 
+                    flag_current = 4
+                    WT_power_current = WT_power_available[t]
+                    FC_power_current = np.minimum(FC_RATED_POWER, power_demand - WT_power_current - GT_power_min)
+                    EL_power_current = 0
+                    GT_power_current = power_demand - WT_power_current - FC_power_current
+
+                # # Case 4: Use GT and WT to satisfy the power demand (do not use GT+EL to recharge H2)
+                # else:
+                #     flag_current = 4
+                #     WT_power_current = WT_power_available[t]
+                #     GT_power_current = power_demand - WT_power_current
+                #     EL_power_current = 0.00
+                #     FC_power_current = 0.00
                 # Case 3: Use GT and WT to satisfy the power demand (use GT+EL to recharge H2)
                 if H2_level[p,t] < H2_RECHARGE_THRESHOLD * H2_CAPACITY:
                     flag_current = 3
@@ -111,6 +176,12 @@ def evaluate_process_model(HEAT_DEMAND, POWER_DEMAND,
 
             else:
 
+                # flag_current = 5
+                # WT_power_current = WT_power_available[t]
+                # GT_power_current = GT_power_max
+                # FC_power_current = np.minimum(FC_RATED_POWER, power_demand - WT_power_current - GT_power_current)
+                # EL_power_current = 0.00
+                
                 # Case 5: Use GT, WT and FC to satisfy the power demand (there is hydrogen available)
                 if H2_level[p,t] > 0.00:
                     flag_current = 5

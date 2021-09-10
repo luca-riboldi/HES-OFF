@@ -139,7 +139,7 @@ class IntegratedModel:
         if self.H2_COFIRE_THRESHOLD < 0.0 or self.H2_COFIRE_THRESHOLD > 1.00:
             raise Exception("H2_COFIRE_THRESHOLD must be between zero and one")
 
-        if self.H2_COFIRE_THRESHOLD <= self.H2_RECHARGE_THRESHOLD:
+        if self.H2_COFIRE_THRESHOLD < self.H2_RECHARGE_THRESHOLD:
             raise Exception("H2_RECHARGE_THRESHOLD must be lower than H2_COFIRE_THRESHOLD")
 
         return True
