@@ -91,7 +91,7 @@ class HesOffForm(flask_wtf.FlaskForm):
                    "title": "Specify the process heat demand over the life-time of the platform"},
         default=None, places=2,
         validators=[wtf.validators.InputRequired(), wtf.validators.NumberRange(min=0)]),
-        min_entries=3, max_entries=3)
+        min_entries=5, max_entries=5) #HERE if more entries needed change also in app/templates/gui.html
 
     POWER_DEMAND = wtf.FieldList(wtf.DecimalField(
         label="Power demand (MW)",
@@ -100,7 +100,7 @@ class HesOffForm(flask_wtf.FlaskForm):
                    "title": "Specify the process power demand over the life-time of the platform"},
         default=None, places=2,
         validators=[wtf.validators.InputRequired(), wtf.validators.NumberRange(min=0)]),
-        min_entries=3, max_entries=3)
+        min_entries=5, max_entries=5) #HERE
 
     STAGE_LENGTH = wtf.FieldList(wtf.DecimalField(
         label="Stage length (years)",
@@ -109,7 +109,7 @@ class HesOffForm(flask_wtf.FlaskForm):
                    "title": "Specify the length of the peak, midlife and tail stages of the platform"},
         default=None, places=2,
         validators=[wtf.validators.InputRequired(), wtf.validators.NumberRange(min=0)]),
-        min_entries=3, max_entries=3)
+        min_entries=5, max_entries=5) #HERE
 
     # Gas turbine specifications
     GT_MODEL = wtf.SelectField(
@@ -137,6 +137,15 @@ class HesOffForm(flask_wtf.FlaskForm):
                    "title": "Specify the maximum volumetric fraction of hydrogen allowed in the gas turbine fuel mixture"},
         default=None, places=2,
         validators=[wtf.validators.InputRequired(), wtf.validators.NumberRange(min=0, max=100)])
+
+    # Heating option specifications
+    HEAT_OPTION = wtf.SelectField(
+        label="Heat supply option",
+        render_kw={"data-bs-toggle": "tooltip",
+                   "data-bs-placement": "right",
+                   "title": "Specify the method to supply heat"},
+        choices=[("", ""), ("WHRU", "WHRU"), ("EL_HEATER", "EL_HEATER")],
+        validators=[wtf.validators.InputRequired()])
 
     # Wind turbine specifications
     WT_MODEL = wtf.SelectField(
@@ -174,12 +183,20 @@ class HesOffForm(flask_wtf.FlaskForm):
         default=None, places=2,
         validators=[wtf.validators.InputRequired(), wtf.validators.NumberRange(min=0)])
 
+    # WIND_FILENAME = wtf.SelectField(
+    #     label="Wind data file",
+    #     render_kw={"data-bs-toggle": "tooltip",
+    #                "data-bs-placement": "right",
+    #                "title": "Specify the name of the file containing the wind speed data"},
+    #     choices=[("", ""), ("SLEIPNERWIND", "Sleipner wind")],
+    #     validators=[wtf.validators.InputRequired()])
+
     WIND_FILENAME = wtf.SelectField(
         label="Wind data file",
         render_kw={"data-bs-toggle": "tooltip",
                    "data-bs-placement": "right",
                    "title": "Specify the name of the file containing the wind speed data"},
-        choices=[("", ""), ("SLEIPNERWIND", "Sleipner wind")],
+        choices=[("", ""), ("SLEIPNERWIND", "Sleipner wind"), ("ALTAWIND", "Alta wind"), ("TRY1", "try1")],  #
         validators=[wtf.validators.InputRequired()])
 
     # Electrolyzer specifications
@@ -266,5 +283,14 @@ class HesOffForm(flask_wtf.FlaskForm):
                    "data-bs-toggle": "tooltip",
                    "data-bs-placement": "right",
                    "title": "Specify the storage level above which hydrogen is co-fired in the gas turbines"},
+        default=None, places=2,
+        validators=[wtf.validators.InputRequired(), wtf.validators.NumberRange(min=0, max=100), RechargeCofireTest()])
+
+    H2_FC_THRESHOLD = wtf.DecimalField(
+        label="Hydrogen fuel cell threshold (%)",
+        render_kw={"placeholder": placeholder_percentage,
+                   "data-bs-toggle": "tooltip",
+                   "data-bs-placement": "right",
+                   "title": "Specify the storage level above which hydrogen is used in the fuel cell stack"},
         default=None, places=2,
         validators=[wtf.validators.InputRequired(), wtf.validators.NumberRange(min=0, max=100), RechargeCofireTest()])

@@ -1,9 +1,6 @@
 # Import packages
 import numpy as np
 import numba as nb
-# import csv
-import random
-# import pandas as pd
 from scipy.io import loadmat
 from importlib_resources import files
 
@@ -11,15 +8,13 @@ from importlib_resources import files
 hydrogen_LHV = 119.96e6
 MW_CO2 = 44.01/1e3
 
-
 ## ------------------------------------------------------------------------------------------------------------------ ##
 ## Process model
 ## ------------------------------------------------------------------------------------------------------------------ ##
 
 @nb.jit(nopython=True, cache=True)
-def evaluate_process_model(HEAT_DEMAND, POWER_DEMAND,
+def evaluate_process_model_opt(HEAT_DEMAND, POWER_DEMAND,
                            GT_MODEL, GT_UNITS, GT_MAX_H2,
-                           HEAT_OPTION,
                            WT_MODEL, WT_RATED_POWER, WT_REF_HEIGHT, WT_HUB_HEIGHT,
                            EL_MODEL, EL_RATED_POWER, EL_EFFICIENCY,
                            FC_MODEL, FC_RATED_POWER, FC_EFFICIENCY,
@@ -27,9 +22,12 @@ def evaluate_process_model(HEAT_DEMAND, POWER_DEMAND,
                            WIND_SPEED, WIND_TIME,
                            natural_gas, hydrogen):
 
-    # WT_RATED_POWER = np.random.randint(0, 50) #WT_RATED_POWER*1.02
-    # print('Below random wind power')
-    # print(WT_RATED_POWER)
+    #Initialize parameters for optimization
+    # WT_RATED_POWER_OPT = 0
+    # EL_RATED_POWER_OPT = 0
+    # FC_RATED_POWER_OPT = 0
+    # CO2_tot_min = 1e15
+    # opt_parameters = np.zeros((3,1))
 
     #  Check the size of the power demand and heat demand arrays
     POWER_DEMAND, HEAT_DEMAND = np.atleast_1d(POWER_DEMAND), np.atleast_1d(HEAT_DEMAND)
@@ -60,8 +58,8 @@ def evaluate_process_model(HEAT_DEMAND, POWER_DEMAND,
 
     # Create the natural gas + hydrogen mixture used in the gas turbines
     blend_NG_H2 = create_fluid_mixture(fluids=(natural_gas, hydrogen),
-                                       fractions=(1.00 - GT_MAX_H2, GT_MAX_H2),
-                                       fraction_type="molar")
+                                    fractions=(1.00 - GT_MAX_H2, GT_MAX_H2),
+                                    fraction_type="molar")
 
     # Loop over the time periods
     for p, (power_demand, heat_demand) in enumerate(zip(POWER_DEMAND, HEAT_DEMAND)):
@@ -70,46 +68,36 @@ def evaluate_process_model(HEAT_DEMAND, POWER_DEMAND,
         H2_level[p, 0] = H2_CAPACITY * H2_INITIAL_LEVEL
 
         # Compute the minimum GT load required to satisfy the heat demand
-        # HEAT_OPTION = 'EL_HEATER'
-        if HEAT_OPTION == 'WHRU':
-            GT_power_min = compute_GT_power_from_heat(model=GT_MODEL, number_of_units=GT_UNITS, heat_output=heat_demand)[0]
-        elif HEAT_OPTION == 'EL_HEATER':
-            GT_power_min = 0
-            power_demand += heat_demand/0.95
-        # GT_power_min = compute_GT_power_from_heat(model=GT_MODEL, number_of_units=GT_UNITS, heat_output=heat_demand)[0]
+        GT_power_min = compute_GT_power_from_heat(model=GT_MODEL, number_of_units=GT_UNITS, heat_output=heat_demand)[0]
 
         # Compute the maximum GT load of the current GT model
         GT_power_max = compute_GT_maximum_power(model=GT_MODEL, number_of_units=GT_UNITS)
 
         # Compute wind power over the year
         WT_power_available = compute_WT_power_output(model=WT_MODEL, hub_height=WT_HUB_HEIGHT, ref_height=WT_REF_HEIGHT, rated_power=WT_RATED_POWER, wind_speed=WIND_SPEED)
-        
+
         for t in times[p]:
 
-            #Possibility to introduce hourly variation of power demand
-            var_factor = 0 #1e6 #W
-            power_demand_h = power_demand - var_factor/2 + var_factor*np.random.rand()
-
             # Use a run-out-of-steam strategy to supply the power demand
-            if GT_power_min + WT_power_available[t] >= power_demand_h:
+            if GT_power_min + WT_power_available[t] >= power_demand:
 
                 # Case 1: Use GT_min and WT to satisfy the power demand (use EL to recharge H2)
                 if H2_level[p,t] < H2_CAPACITY:
                     flag_current = 1
                     GT_power_current = GT_power_min
-                    EL_power_current = np.minimum(EL_RATED_POWER, GT_power_min + WT_power_available[t] - power_demand_h)
-                    WT_power_current = power_demand_h + EL_power_current - GT_power_current
+                    EL_power_current = np.minimum(EL_RATED_POWER, GT_power_min + WT_power_available[t] - power_demand)
+                    WT_power_current = power_demand + EL_power_current - GT_power_current
                     FC_power_current = 0.00
 
                 # Case 2: Use GT_min and WT to satisfy the power demand (do not use EL to recharge H2)
                 else:
                     flag_current = 2
                     GT_power_current = GT_power_min
-                    WT_power_current = power_demand_h - GT_power_current
+                    WT_power_current = power_demand - GT_power_current
                     EL_power_current = 0.00
                     FC_power_current = 0.00
 
-            elif GT_power_max + WT_power_available[t] >= power_demand_h:
+            elif GT_power_max + WT_power_available[t] >= power_demand:
                 
                 # #One option to decide whether to produce H2 (case 3A) or not (case 3B) is to look into the future (e.g. 1 week)
                 # #If in the future it is predicted the need of much H2 (because low wind), then 3A. And viceversa.
@@ -121,8 +109,8 @@ def evaluate_process_model(HEAT_DEMAND, POWER_DEMAND,
                 # # if H2_level[p,t] < H2_RECHARGE_THRESHOLD * H2_CAPACITY:
                 # #     flag_current = 3
                 # #     WT_power_current = WT_power_available[t]
-                # #     EL_power_current = np.minimum(EL_RATED_POWER, GT_power_max + WT_power_current - power_demand_h)
-                # #     GT_power_current = np.minimum(GT_power_max, power_demand_h + EL_power_current - WT_power_current)
+                # #     EL_power_current = np.minimum(EL_RATED_POWER, GT_power_max + WT_power_current - power_demand)
+                # #     GT_power_current = np.minimum(GT_power_max, power_demand + EL_power_current - WT_power_current)
                 # #     FC_power_current = 0.00
                 
                 # # Case 3B: Use GT and WT to satisfy the power demand (do not use GT+EL to recharge H2)
@@ -130,17 +118,17 @@ def evaluate_process_model(HEAT_DEMAND, POWER_DEMAND,
                 #     flag_current = 3
                 #     WT_power_current = WT_power_available[t]
                 #     EL_power_current = 0.00
-                #     GT_power_current = np.minimum(GT_power_max, power_demand_h - WT_power_current)
+                #     GT_power_current = np.minimum(GT_power_max, power_demand - WT_power_current)
                 #     FC_power_current = 0.00                
 
                 # #Another option to decide whether to produce H2 (case 3A) or not (case 3B) is to define different levels of H2 in storage
-                                                 
+                                                
                 # Case 3A: Use GT and WT to satisfy the power demand (use GT+EL to recharge H2)
                 if H2_level[p,t] < H2_RECHARGE_THRESHOLD * H2_CAPACITY:
                     flag_current = 3
                     WT_power_current = WT_power_available[t]
-                    EL_power_current = np.minimum(EL_RATED_POWER, GT_power_max + WT_power_current - power_demand_h)
-                    GT_power_current = np.minimum(GT_power_max, power_demand_h + EL_power_current - WT_power_current)
+                    EL_power_current = np.minimum(EL_RATED_POWER, GT_power_max + WT_power_current - power_demand)
+                    GT_power_current = np.minimum(GT_power_max, power_demand + EL_power_current - WT_power_current)
                     FC_power_current = 0.00
                 
                 # Case 3B: Use GT and WT to satisfy the power demand (do not use GT+EL to recharge H2)
@@ -148,22 +136,22 @@ def evaluate_process_model(HEAT_DEMAND, POWER_DEMAND,
                     flag_current = 3
                     WT_power_current = WT_power_available[t]
                     EL_power_current = 0.00
-                    GT_power_current = np.minimum(GT_power_max, power_demand_h - WT_power_current)
+                    GT_power_current = np.minimum(GT_power_max, power_demand - WT_power_current)
                     FC_power_current = 0.00
 
                 # Case 4: Use FC, GT and WT to satisfy the power demand (do not use GT+EL to recharge H2)
                 else: 
                     flag_current = 4
                     WT_power_current = WT_power_available[t]
-                    FC_power_current = np.minimum(FC_RATED_POWER, power_demand_h - WT_power_current - GT_power_min)
+                    FC_power_current = np.minimum(FC_RATED_POWER, power_demand - WT_power_current - GT_power_min)
                     EL_power_current = 0
-                    GT_power_current = power_demand_h - WT_power_current - FC_power_current
+                    GT_power_current = power_demand - WT_power_current - FC_power_current
 
                 # # Case 4: Use GT and WT to satisfy the power demand (do not use GT+EL to recharge H2)
                 # else:
                 #     flag_current = 4
                 #     WT_power_current = WT_power_available[t]
-                #     GT_power_current = power_demand_h - WT_power_current
+                #     GT_power_current = power_demand - WT_power_current
                 #     EL_power_current = 0.00
                 #     FC_power_current = 0.00
 
@@ -172,7 +160,7 @@ def evaluate_process_model(HEAT_DEMAND, POWER_DEMAND,
                 # flag_current = 5
                 # WT_power_current = WT_power_available[t]
                 # GT_power_current = GT_power_max
-                # FC_power_current = np.minimum(FC_RATED_POWER, power_demand_h - WT_power_current - GT_power_current)
+                # FC_power_current = np.minimum(FC_RATED_POWER, power_demand - WT_power_current - GT_power_current)
                 # EL_power_current = 0.00
                 
                 # Case 5: Use GT, WT and FC to satisfy the power demand (there is hydrogen available)
@@ -180,7 +168,7 @@ def evaluate_process_model(HEAT_DEMAND, POWER_DEMAND,
                     flag_current = 5
                     WT_power_current = WT_power_available[t]
                     GT_power_current = GT_power_max
-                    FC_power_current = np.minimum(FC_RATED_POWER, power_demand_h - WT_power_current - GT_power_current)
+                    FC_power_current = np.minimum(FC_RATED_POWER, power_demand - WT_power_current - GT_power_current)
                     EL_power_current = 0.00
 
                 # Case 6: The GT and WT cannot satisfy the power demand (there is no hydrogen available)
@@ -220,7 +208,7 @@ def evaluate_process_model(HEAT_DEMAND, POWER_DEMAND,
 
             # Evaluate the power balance (W)
             # power_deficit_current = np.maximum(0.0, power_demand + EL_power_current - WT_power_current - GT_power_current - FC_power_current)
-            power_deficit_current = power_demand_h + EL_power_current - WT_power_current - GT_power_current - FC_power_current
+            power_deficit_current = power_demand + EL_power_current - WT_power_current - GT_power_current - FC_power_current
 
             # Compute the hydrogen level for the next time instance (skip last time step computation)
             if t < times[p,-1]:
@@ -239,24 +227,19 @@ def evaluate_process_model(HEAT_DEMAND, POWER_DEMAND,
             H2_utilized[p,t] = H2_cofired_current + H2_converted_current
             NG_utilized[p,t] = NG_utilized_current
             CO2_emissions[p, t] = CO2_emissions_current * 3600
-        
-    # Store the results in a dictionary
-    result_dict = {"flag":           flag*1.00,     # Conversion from integer to float for Numba
-                   "times":          times*1.00,    # Conversion from integer to float for Numba
-                   "GT_power":       GT_power,
-                   "WT_power":       WT_power,
-                   "FC_power":       FC_power,
-                   "EL_power":       EL_power,
-                   "H2_level":       H2_level,
-                   "H2_produced":    H2_produced,
-                   "H2_cofired":     H2_cofired,
-                   "H2_converted":   H2_converted,
-                   "H2_utilized":    H2_utilized,
-                   "NG_utilized":    NG_utilized,
-                   "CO2_emissions":  CO2_emissions,
-                   "power_deficit":  power_deficit}
 
-    return result_dict
+    
+    CO2_tot = np.sum(CO2_emissions)
+    # if CO2_tot < CO2_tot_min:
+    #     WT_RATED_POWER_OPT = WT_RATED_POWER
+    #     EL_RATED_POWER_OPT = EL_RATED_POWER
+    #     FC_RATED_POWER_OPT = FC_RATED_POWER
+
+    # opt_parameters[0,0] = WT_RATED_POWER_OPT
+    # opt_parameters[1,0] = EL_RATED_POWER_OPT
+    # opt_parameters[2,0] = FC_RATED_POWER_OPT
+
+    return CO2_tot #opt_parameters #WT_RATED_POWER_OPT, EL_RATED_POWER_OPT, FC_RATED_POWER_OPT
 
 
 ## ------------------------------------------------------------------------------------------------------------------ ##
@@ -270,14 +253,6 @@ HYWIND_data_power = np.asarray(((
                     11.00, 12.00, 13.00, 14.00, 15.00, 16.00, 25.00, 26.00, 50.00),
                     (0.0000, 0.0000, 0.0000, 0.0000, 0.0290, 0.0725, 0.1304, 0.2101, 0.3261, 0.4638,
                     0.6232, 0.7754, 0.8913, 0.9565, 0.9855, 1.0000, 1.0000, 1.0000, 0.0000, 0.0000)))
-
-# VESTAS turbine data collected from https://en.wind-turbine-models.com/turbines/318-vestas-v164-8.0
-VESTAS_unit_power = 8e6
-VESTAS_data_power = np.asarray(((
-                    0.00, 1.00, 2.00, 3.00, 4.00, 5.00, 6.00, 7.00, 8.00, 9.00, 10.00,
-                    11.00, 12.00, 13.00, 14.00, 15.00, 16.00, 25.00, 26.00, 50.00),
-                    (0.00, 0.00, 0.00, 0.00, 100.00, 650.00, 1150.00, 1850.00, 2900.00, 4150.00,
-                    5600.00, 7100.00, 7800.00, 8000.00, 8000.00, 8000.00, 8000.00, 8000.00, 0.0000, 0.0000)))
 
 # NREL turbine data based on report NREL/TP-500-38060
 NREL_unit_power = 5e6
@@ -300,12 +275,6 @@ def compute_WT_power_output(model, rated_power, hub_height, ref_height, wind_spe
         unit_power = NREL_unit_power
         speed_data = NREL_data_power[0,:]
         power_data = NREL_data_power[1,:]
-
-    elif model == 'VESTAS':
-        unit_power = VESTAS_unit_power
-        speed_data = VESTAS_data_power[0,:]
-        power_data = VESTAS_data_power[1,:]
-
     else:
         raise Exception("Invalid wind turbine model\nValid options: 'HYWIND', 'NREL'")
 
@@ -338,32 +307,23 @@ def compute_WT_capacity_factor(model, rated_power, hub_height, ref_height, wind_
 def read_wind_data(filename):
 
     # Load wind data file
-    if filename == "ALTAWIND":        
-        mat_data = loadmat(files('hes_off.core.data_files').joinpath("Alta_wind_sleipner_comp.mat"))
-    elif filename == "TRY1":
-        mat_data = loadmat(files('hes_off.core.data_files').joinpath("try1.mat"))
-    elif filename == "SLEIPNERWIND":
+    if filename == "SLEIPNERWIND":
         mat_data = loadmat(files('hes_off.core.data_files').joinpath("sleipnerwind.mat"))
-    # elif filename == "EXWIND":
-    #     col_list = ["time", "speed"]
-    #     df = pd.read_csv("exwind.csv", usecols=col_list) #data_files/exwind.csv
-    #     print(df["time"])
     else:
         mat_data = loadmat(filename)
+
     # Store wind data into a dictionary
-    wind_data = {"speed": mat_data["wind"][0][2][0].squeeze(),
-                 "time":  mat_data["wind"][0][2][1].squeeze(),
-                 "year":  mat_data["wind"][0][2][2].squeeze()}
+    wind_data = {"speed": mat_data["wind"][0][0][0].squeeze(),
+                 "time":  mat_data["wind"][0][0][1].squeeze(),
+                 "year":  mat_data["wind"][0][0][2].squeeze()}
 
-    if filename == "SLEIPNERWIND": #if filename != "ALTAWIND":
-        # Convert from days to hours
-        wind_data["time"] = (wind_data["time"] - wind_data["time"][0]) * 24
+    # Convert from days to hours
+    wind_data["time"] = (wind_data["time"] - wind_data["time"][0]) * 24
 
-        # Convert from minute-based to hourly data
-        N = 60
-        wind_data["time"] = wind_data["time"][0:-1:N]
-        wind_data["speed"] = np.asarray([np.mean(wind_data["speed"][i:i + N]) for i in range(0, len(wind_data["speed"]), N)])
-    
+    # Convert from minute-based to hourly data
+    N = 60
+    wind_data["time"] = wind_data["time"][0:-1:N]
+    wind_data["speed"] = np.asarray([np.mean(wind_data["speed"][i:i + N]) for i in range(0, len(wind_data["speed"]), N)])
     return wind_data
 
 

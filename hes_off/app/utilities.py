@@ -100,15 +100,18 @@ def create_plot_dict(EnergySystem):
 def initialize_data_dict():
     """Initialize a Python dictionary containing the data for the UI"""
     data_dict = {}
-    data_dict["HEADER"] = ["Performance indicator", "", ["Peak years", "Mid years", "Tail years", "Total"]]
-    data_dict["H2_utilized"] = ["H<sub>2</sub>&nbsp;consumption (ton)", "Accumulated hydrogen consumption", 4 * [""]]
+    data_dict["HEADER"] = ["Performance indicator", "", ["Peak years", "Mid years", "Tail years", "Extra1", "Extra2", "Total"]] #, "Other years" #HERE 
+    data_dict["H2_utilized"] = ["H<sub>2</sub>&nbsp;consumption (ton)", "Accumulated hydrogen consumption", 6 * [""]] #5 #HERE
     # data_dict["NG_utilized"] = ["NG consumption (kton)", "Accumulated natural gas consumption", 4 * [""]]
-    data_dict["CO2_emissions"] = ["CO<sub>2</sub>&nbsp;emissions (kton)", "Accumulated carbon dioxide emissions", 4*[""]]
-    data_dict["GT_energy"] = ["GT energy  (GWe&#183h)", "Accumulated gas turbine electricity generation", 4 * [""]]
-    data_dict["WT_energy"] = ["WT energy (GWe&#183h)", "Accumulated wind farm electricity generation", 4 * [""]]
-    data_dict["FC_energy"] = ["FC energy (GWe&#183h)", "Accumulated fuel cell electricity generation", 4 * [""]]
-    data_dict["EL_energy"] = ["EL energy (GWe&#183h)", "Accumulated electrolyzer electricity consumption", 4 * [""]]
-    data_dict["energy_deficit"] = ["Energy deficit (GWe&#183h)", "Accumulated energy deficit", 4*[""]]
+    data_dict["CO2_emissions"] = ["CO<sub>2</sub>&nbsp;emissions (kton)", "Accumulated carbon dioxide emissions", 6*[""]] #5 #HERE
+    data_dict["GT_energy"] = ["GT energy  (GWe&#183h)", "Accumulated gas turbine electricity generation", 6 * [""]] #5 #HERE
+    data_dict["WT_energy"] = ["WT energy (GWe&#183h)", "Accumulated wind farm electricity generation", 6 * [""]] #5 #HERE
+    data_dict["FC_energy"] = ["FC energy (GWe&#183h)", "Accumulated fuel cell electricity generation", 6 * [""]] #5 #HERE
+    data_dict["EL_energy"] = ["EL energy (GWe&#183h)", "Accumulated electrolyzer electricity consumption", 6 * [""]] #5 #HERE
+    data_dict["energy_deficit"] = ["Energy deficit (GWe&#183h)", "Accumulated energy deficit", 6*[""]] #5 #HERE
+    
+    # data_dict["opt_wind"] = ["opt wind (GWe&#183h)", "Accumulated optimal wind", 4*[""]]
+
     return data_dict
 
 
@@ -123,4 +126,7 @@ def create_data_dict(EnergySystem):
     data_dict["FC_energy"][-1]      = ["{:0.2f}".format(item/1e9) for item in EnergySystem.FC_energy]
     data_dict["EL_energy"][-1]      = ["{:0.2f}".format(item/1e9) for item in EnergySystem.EL_energy]
     data_dict["energy_deficit"][-1] = ["{:0.2f}".format(max(0.0, item/1e9)) for item in EnergySystem.energy_deficit]
+
+    # data_dict["opt_wind"][-1]       = ["{:0.2f}".format(item/1e6) for item in EnergySystem.opt_wind]
+
     return data_dict

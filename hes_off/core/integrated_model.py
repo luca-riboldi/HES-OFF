@@ -8,6 +8,8 @@ from matplotlib.figure import  Figure
 
 from .utilities import *
 from .process_model import *
+# from .process_model_TRY import *
+# from .process_model_opt import *
 
 # Define font settings
 fontsize = 12
@@ -22,7 +24,7 @@ class IntegratedModel:
     The IntegratedModel object defines and stores parameters of the HES-OFF concept
     """
 
-    stage_labels = ["Peak years", "Midlife years", "Tail years"]
+    stage_labels = ["Peak years", "Midlife years", "Tail years", "Extra1", "Extra2"] # #HERE
 
     def __init__(self, IN):
 
@@ -38,6 +40,9 @@ class IntegratedModel:
         self.GT_MODEL = self.IN["GT_MODEL"]
         self.GT_UNITS = self.IN["GT_UNITS"]
         self.GT_MAX_H2 = self.IN["GT_MAX_H2"]/100
+
+        # Heating option specifications
+        self.HEAT_OPTION = self.IN["HEAT_OPTION"]
 
         # Wind farm specifications
         self.WT_MODEL = self.IN["WT_MODEL"]
@@ -70,12 +75,15 @@ class IntegratedModel:
         self.H2_INITIAL_LEVEL = self.IN["H2_INITIAL_LEVEL"] / 100
         self.H2_RECHARGE_THRESHOLD = self.IN["H2_RECHARGE_THRESHOLD"]/100
         self.H2_COFIRE_THRESHOLD = self.IN["H2_COFIRE_THRESHOLD"]/100
+        self.H2_FC_THRESHOLD = self.IN["H2_FC_THRESHOLD"]/100
 
         # Wind data specifications
         self.WIND_FILENAME = self.IN["WIND_FILENAME"]
+        # print(self.WIND_FILENAME)
         self.WIND_DATA = read_wind_data(IN["WIND_FILENAME"])
         self.WIND_SPEED = self.WIND_DATA["speed"]
-        self.WIND_TIME = self.WIND_DATA["time"]
+        self.WIND_TIME = self.WIND_DATA["time"]        
+        # print(self.WIND_SPEED)
 
         # Check the input variable values
         self.check_input_variables()
@@ -142,19 +150,63 @@ class IntegratedModel:
         if self.H2_COFIRE_THRESHOLD < self.H2_RECHARGE_THRESHOLD:
             raise Exception("H2_RECHARGE_THRESHOLD must be lower than H2_COFIRE_THRESHOLD")
 
+        if self.H2_FC_THRESHOLD < 0.0 or self.H2_FC_THRESHOLD > 1.00:
+            raise Exception("H2_FC_THRESHOLD must be between zero and one")
+
         return True
+
+    # def evaluate_process_model_opt(self):
+
+    #     return evaluate_process_model_opt(self.HEAT_DEMAND, self.POWER_DEMAND,
+    #                                                  self.GT_MODEL, self.GT_UNITS, self.GT_MAX_H2,
+    #                                                  self.WT_MODEL, self.WT_RATED_POWER,
+    #                                                  self.WT_REF_HEIGHT, self.WT_HUB_HEIGHT,
+    #                                                  self.EL_MODEL, self.EL_RATED_POWER, self.EL_EFFICIENCY,
+    #                                                  self.FC_MODEL, self.FC_RATED_POWER, self.FC_EFFICIENCY,
+    #                                                  self.H2_CAPACITY, self.H2_INITIAL_LEVEL,
+    #                                                  self.H2_RECHARGE_THRESHOLD, self.H2_COFIRE_THRESHOLD, self.H2_FC_THRESHOLD,
+    #                                                  self.WIND_SPEED, self.WIND_TIME,
+    #                                                  natural_gas, hydrogen)
 
     def evaluate_process_model(self):
 
-        # Evaluate the process model
+    #     # self.WT_RATED_POWER = 0
+    #     self.opt_parameters = evaluate_process_model_opt(self.HEAT_DEMAND, self.POWER_DEMAND,
+    #                                                  self.GT_MODEL, self.GT_UNITS, self.GT_MAX_H2,
+    #                                                  self.WT_MODEL, self.WT_RATED_POWER,
+    #                                                  self.WT_REF_HEIGHT, self.WT_HUB_HEIGHT,
+    #                                                  self.EL_MODEL, self.EL_RATED_POWER, self.EL_EFFICIENCY,
+    #                                                  self.FC_MODEL, self.FC_RATED_POWER, self.FC_EFFICIENCY,
+    #                                                  self.H2_CAPACITY, self.H2_INITIAL_LEVEL,
+    #                                                  self.H2_RECHARGE_THRESHOLD, self.H2_COFIRE_THRESHOLD, self.H2_FC_THRESHOLD,
+    #                                                  self.WIND_SPEED, self.WIND_TIME,
+    #                                                  natural_gas, hydrogen)
+
+    #     # Evaluate the process model (w/ optimization)
+    #     print(f"optimal wind power (MW):  {self.opt_parameters[0,0]/1e6:.1f}")
+    #     print(f"optimal EL size (MW):  {self.opt_parameters[1,0]/1e6:.1f}")
+    #     print(f"optimal FC size (MW):  {self.opt_parameters[2,0]/1e6:.1f}")
+    #     self.process_output = evaluate_process_model(self.HEAT_DEMAND, self.POWER_DEMAND,
+    #                                                  self.GT_MODEL, self.GT_UNITS, self.GT_MAX_H2,
+    #                                                  self.WT_MODEL, self.opt_parameters[0,0],
+    #                                                  self.WT_REF_HEIGHT, self.WT_HUB_HEIGHT,
+    #                                                  self.EL_MODEL, self.opt_parameters[1,0], self.EL_EFFICIENCY,
+    #                                                  self.FC_MODEL, self.opt_parameters[2,0], self.FC_EFFICIENCY,
+    #                                                  self.H2_CAPACITY, self.H2_INITIAL_LEVEL,
+    #                                                  self.H2_RECHARGE_THRESHOLD, self.H2_COFIRE_THRESHOLD, self.H2_FC_THRESHOLD,
+    #                                                  self.WIND_SPEED, self.WIND_TIME,
+    #                                                  natural_gas, hydrogen)
+
+        # Evaluate the process model (w/o optimization)
         self.process_output = evaluate_process_model(self.HEAT_DEMAND, self.POWER_DEMAND,
                                                      self.GT_MODEL, self.GT_UNITS, self.GT_MAX_H2,
+                                                     self.HEAT_OPTION,
                                                      self.WT_MODEL, self.WT_RATED_POWER,
                                                      self.WT_REF_HEIGHT, self.WT_HUB_HEIGHT,
                                                      self.EL_MODEL, self.EL_RATED_POWER, self.EL_EFFICIENCY,
                                                      self.FC_MODEL, self.FC_RATED_POWER, self.FC_EFFICIENCY,
                                                      self.H2_CAPACITY, self.H2_INITIAL_LEVEL,
-                                                     self.H2_RECHARGE_THRESHOLD, self.H2_COFIRE_THRESHOLD,
+                                                     self.H2_RECHARGE_THRESHOLD, self.H2_COFIRE_THRESHOLD, self.H2_FC_THRESHOLD,
                                                      self.WIND_SPEED, self.WIND_TIME,
                                                      natural_gas, hydrogen)
 
@@ -170,9 +222,10 @@ class IntegratedModel:
         self.CO2_emissions = self.create_entry("CO2_emissions")
         self.energy_deficit = self.create_entry("power_deficit")
 
+        # self.opt_wind = self.create_entry("opt_wind_pw")
 
     def create_entry(self, name):
-        value = np.sum(self.process_output[name], axis=1)*self.STAGE_LENGTH  # Units (kg)
+        value = np.sum(self.process_output[name], axis=1)*self.STAGE_LENGTH  #
         value = np.concatenate((value, np.sum(value)[np.newaxis]))
         return value
 
