@@ -6,11 +6,29 @@ import random
 # import pandas as pd
 from scipy.io import loadmat
 from importlib_resources import files
+import matplotlib.pyplot as plt
 
 # Compile time constants
 hydrogen_LHV = 119.96e6
 MW_CO2 = 44.01/1e3
 
+
+# mu = 30e6 #mean
+# sigma = 1e6 #W #standard deviation
+# instances = 8760 #
+# s = np.random.normal(mu, sigma, instances)
+# print(len(s))
+# print(s[45]/1e6)
+# print(s[545]/1e6)
+# print(s[85]/1e6)
+# print(s[4545]/1e6)
+# print(s[8545]/1e6)
+# count, bins, ignored = plt.hist(s, 30, density=True)
+# plt.plot(bins, 1/(sigma * np.sqrt(2 * np.pi)) *
+#             np.exp( - (bins - mu)**2 / (2 * sigma**2) ),
+#         linewidth=2, color='r')
+# plt.show()
+# input("Press Enter to continue...")
 
 ## ------------------------------------------------------------------------------------------------------------------ ##
 ## Process model
@@ -64,7 +82,7 @@ def evaluate_process_model(HEAT_DEMAND, POWER_DEMAND,
                                        fraction_type="molar")
 
     # Loop over the time periods
-    for p, (power_demand, heat_demand) in enumerate(zip(POWER_DEMAND, HEAT_DEMAND)):
+    for p, (power_demand, heat_demand) in enumerate(zip(POWER_DEMAND, HEAT_DEMAND)):   
 
         # Compute the initial level of hydrogen in the storage system
         H2_level[p, 0] = H2_CAPACITY * H2_INITIAL_LEVEL
@@ -77,6 +95,12 @@ def evaluate_process_model(HEAT_DEMAND, POWER_DEMAND,
             GT_power_min = 0
             power_demand += heat_demand/0.95
         # GT_power_min = compute_GT_power_from_heat(model=GT_MODEL, number_of_units=GT_UNITS, heat_output=heat_demand)[0]
+        
+        #Variability of power demand over a year as a gaussian distribution
+        mu = power_demand #mean
+        sigma = power_demand*0.05 #0 # #W #standard deviation (now as 5% of the power demand)
+        instances = 8760 #
+        power_demand_hh = np.random.normal(mu, sigma, instances)    
 
         # Compute the maximum GT load of the current GT model
         GT_power_max = compute_GT_maximum_power(model=GT_MODEL, number_of_units=GT_UNITS)
@@ -87,8 +111,7 @@ def evaluate_process_model(HEAT_DEMAND, POWER_DEMAND,
         for t in times[p]:
 
             #Possibility to introduce hourly variation of power demand
-            var_factor = 0 #1e6 #W
-            power_demand_h = power_demand - var_factor/2 + var_factor*np.random.rand()
+            power_demand_h = power_demand_hh[t]
 
             # Use a run-out-of-steam strategy to supply the power demand
             if GT_power_min + WT_power_available[t] >= power_demand_h:
